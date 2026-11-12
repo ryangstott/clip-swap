@@ -1,5 +1,5 @@
 // Clip Swap service worker: lets the app install to the home screen and open instantly.
-const VERSION = 'cs-1';
+const VERSION = 'cs-2';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-192.png', './icons/maskable-512.png', './icons/apple-touch-icon.png', './icons/favicon-48.png'];
 const LIB = 'cdn.jsdelivr.net';
 
@@ -17,7 +17,15 @@ self.addEventListener('fetch', e => {
     return;
   }
   if (url.origin !== location.origin) return; // fal.ai uploads, jobs and videos always go to the network
-  // App files: answer from cache straight away, refresh the cache in the background.
+  // The page itself: network first so fixes show up on the next open, cache when offline.
+  if (req.mode === 'navigate') {
+    e.respondWith(caches.open(VERSION).then(async c => {
+      try { const res = await fetch(req); if (res.ok) c.put('./index.html', res.clone()); return res; }
+      catch { return (await c.match('./index.html')) || new Response('Offline', { status: 503 }); }
+    }));
+    return;
+  }
+  // Other app files: answer from cache straight away, refresh the cache in the background.
   e.respondWith(caches.open(VERSION).then(async c => {
     const hit = await c.match(req, { ignoreSearch: true }) || (req.mode === 'navigate' ? await c.match('./index.html') : null);
     const net = fetch(req).then(res => { if (res.ok) c.put(req, res.clone()); return res; }).catch(() => null);

@@ -167,7 +167,11 @@ $("vFile").onchange = e => {
   const url = URL.createObjectURL(f);
   const v = document.createElement("video");
   v.src = url; v.muted = true; v.playsInline = true; v.loop = true; v.autoplay = true;
-  v.onloadedmetadata = () => { duration = v.duration || 0; $("vSub").textContent = `${duration.toFixed(1)} s · ${(f.size/1e6).toFixed(1)} MB`; refresh(); };
+  v.onloadedmetadata = () => {
+    duration = v.duration || 0;
+    const warn = duration > 30 ? " · over 30 s, trim it first" : f.size > 90e6 ? " · big file, a shorter or lower-res clip uploads faster" : "";
+    $("vSub").textContent = `${duration.toFixed(1)} s · ${(f.size/1e6).toFixed(1)} MB${warn}`; refresh();
+  };
   $("vThumb").replaceChildren(v);
   $("vName").textContent = f.name || "Video";
   refresh();
@@ -212,26 +216,53 @@ function errText(e){
   if (Array.isArray(d)) return d.map(x => x.msg || JSON.stringify(x)).join("; ");
   if (d) return typeof d === "string" ? d : JSON.stringify(d);
   if (e?.status === 401 || e?.status === 403) return "fal.ai rejected the API key. Check it under API key.";
+  if (isNetErr(e)) return `couldn't reach fal.ai (${e.message}). Check your signal and try again.`;
   return e?.message || String(e);
 }
 
 // ---------- run ----------
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const isNetErr = e => /failed to fetch|network|load failed|aborted/i.test(e?.message || "") && !e?.status;
+const toDataUri = f => new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => bad(r.error); r.readAsDataURL(f); });
+
+// Upload to fal storage with retries; if fal storage can't be reached at all, send small files inline instead.
+async function upload(file, label){
+  const mb = (file.size / 1e6).toFixed(1);
+  for (let i = 1; i <= 3; i++) {
+    try {
+      status(`Uploading ${label} (${mb} MB)${i > 1 ? ` · try ${i} of 3` : ""}…`, false, true);
+      return await fal.storage.upload(file);
+    } catch (e) {
+      if (!isNetErr(e)) throw e;
+      if (i < 3) await wait(2000 * i);
+    }
+  }
+  if (file.size <= 20e6) { status(`Upload server unreachable, sending ${label} directly…`, false, true); return await toDataUri(file); }
+  throw new Error(`Couldn't upload the ${label} (${mb} MB). Check your signal, or trim the clip shorter and try again.`);
+}
+
 $("go").onclick = async () => {
   if (!getKey()) { openKey(); return; }
   fal.config({ credentials: getKey() });
   busy = true; refresh(); $("result").classList.add("hidden");
+  let step = "uploading the video";
   try {
-    status("Uploading video…", false, true);
-    const video_url = await fal.storage.upload(videoFile);
-    status("Uploading photo…", false, true);
-    const image_url = await fal.storage.upload(photoFile);
+    const video_url = await upload(videoFile, "video");
+    step = "uploading the photo";
+    const image_url = await upload(photoFile, "photo");
+    step = "sending the job to the model";
     status("Sending to the model…", false, true);
     const endpoint = ENDPOINTS[mode];
-    const { request_id } = await fal.queue.submit(endpoint, { input: { video_url, image_url, resolution: res } });
-    store.set("pendingJob", JSON.stringify({ endpoint, request_id, t: Date.now() }));
-    await poll(endpoint, request_id);
+    let sub, tries = 0;
+    while (true) {
+      try { sub = await fal.queue.submit(endpoint, { input: { video_url, image_url, resolution: res } }); break; }
+      catch (e) { if (!isNetErr(e) || ++tries >= 3) throw e; await wait(2000 * tries); }
+    }
+    store.set("pendingJob", JSON.stringify({ endpoint, request_id: sub.request_id, t: Date.now() }));
+    step = "checking on the job";
+    await poll(endpoint, sub.request_id);
   } catch (e) {
-    status("Couldn't finish: " + errText(e), true);
+    status(`Stopped while ${step}: ${errText(e)}`, true);
   } finally { busy = false; refresh(); }
 };
 
