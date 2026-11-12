@@ -255,7 +255,7 @@ $("go").onclick = async () => {
     const endpoint = ENDPOINTS[mode];
     let sub, tries = 0;
     while (true) {
-      try { sub = await fal.queue.submit(endpoint, { input: { video_url, image_url, resolution: res } }); break; }
+      try { sub = await fal.queue.submit(endpoint, { input: { video_url, image_url, resolution: res, enable_safety_checker: false, enable_output_safety_checker: false } }); break; }
       catch (e) { if (!isNetErr(e) || ++tries >= 3) throw e; await wait(2000 * tries); }
     }
     store.set("pendingJob", JSON.stringify({ endpoint, request_id: sub.request_id, t: Date.now() }));
