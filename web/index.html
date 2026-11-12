@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#121519">
+<meta name="description" content="Swap the person in a video for a character from a photo.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Clip Swap">
+<title>Clip Swap</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon-48.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+  :root{--bg:#121519;--card:#1b1f25;--line:#2a3039;--text:#eef1f5;--dim:#9aa3ae;--pink:#ff5c8a;--blue:#5ac8fa;--bad:#ff6b6b;--ok:#4cd964}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  body{padding:calc(env(safe-area-inset-top) + 14px) 14px calc(env(safe-area-inset-bottom) + 24px)}
+  main{max-width:560px;margin:0 auto}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  h1{font-size:22px;margin:0;letter-spacing:.2px}
+  h1 span{color:var(--pink)}
+  .iconbtn{background:none;border:1px solid var(--line);color:var(--dim);border-radius:10px;padding:8px 12px;font-size:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+  .card h2{font-size:13px;text-transform:uppercase;letter-spacing:.8px;color:var(--dim);margin:0 0 10px;font-weight:600}
+  .pick{display:flex;gap:12px;align-items:center}
+  .thumb{width:96px;height:128px;border-radius:10px;background:#0d0f12;border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:12px;overflow:hidden;flex:none;text-align:center}
+  .thumb video,.thumb img{width:100%;height:100%;object-fit:cover}
+  .pick .meta{flex:1;min-width:0}
+  .pick .meta .name{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pick .meta .sub{font-size:13px;color:var(--dim);margin-top:2px}
+  label.btn,button.btn{display:inline-block;margin-top:10px;background:#262c35;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px 14px;font-size:15px;cursor:pointer}
+  input[type=file]{display:none}
+  .seg{display:flex;background:#0d0f12;border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+  .seg button{flex:1;background:none;border:0;color:var(--dim);padding:9px 6px;border-radius:8px;font-size:14px}
+  .seg button.on{background:#262c35;color:var(--text)}
+  .hint{font-size:13px;color:var(--dim);margin:8px 0 0}
+  .row{display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:14px}
+  .go{width:100%;background:linear-gradient(90deg,var(--pink),#ff8a5c);border:0;color:#fff;font-weight:700;font-size:17px;border-radius:14px;padding:15px;margin-top:4px}
+  .go:disabled{opacity:.4}
+  .status{font-size:14px;margin-top:12px;min-height:20px}
+  .status.err{color:var(--bad)}
+  .bar{height:6px;background:#0d0f12;border-radius:6px;overflow:hidden;margin-top:8px;display:none}
+  .bar i{display:block;height:100%;width:30%;background:var(--blue);border-radius:6px;animation:slide 1.4s ease-in-out infinite}
+  @keyframes slide{0%{margin-left:-30%}100%{margin-left:100%}}
+  .result video{width:100%;border-radius:10px;background:#000;display:block}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  .actions .btn{flex:1;text-align:center;text-decoration:none}
+  .foot{font-size:12px;color:var(--dim);text-align:center;margin-top:16px}
+  dialog{background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:16px;padding:18px;width:min(92vw,460px)}
+  dialog::backdrop{background:rgba(0,0,0,.6)}
+  dialog input[type=password],dialog input[type=text]{width:100%;background:#0d0f12;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:11px;font-size:15px;margin-top:6px}
+  a{color:var(--blue)}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Clip <span>Swap</span></h1>
+    <button class="iconbtn" id="keyBtn">API key</button>
+  </header>
+
+  <section class="card">
+    <h2>1 · Video</h2>
+    <div class="pick">
+      <div class="thumb" id="vThumb">No video</div>
+      <div class="meta">
+        <div class="name" id="vName">Pick the clip with the person to replace</div>
+        <div class="sub" id="vSub">Clear, well-lit, one main person works best. Up to ~30 s.</div>
+        <label class="btn" for="vFile">Choose video</label>
+        <input type="file" id="vFile" accept="video/*">
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>2 · Character photo</h2>
+    <div class="pick">
+      <div class="thumb" id="pThumb">No photo</div>
+      <div class="meta">
+        <div class="name" id="pName">Pick the character to put in</div>
+        <div class="sub">Front-on, full body if the clip is full body. Plain background helps.</div>
+        <label class="btn" for="pFile">Choose photo</label>
+        <input type="file" id="pFile" accept="image/*">
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>3 · Settings</h2>
+    <div class="seg" id="modeSeg">
+      <button data-v="replace" class="on">Swap into video</button>
+      <button data-v="move">Animate photo</button>
+    </div>
+    <p class="hint" id="modeHint">Keeps the video's background, lighting and camera. Your character takes the person's place.</p>
+    <div class="row"><span>Quality</span>
+      <div class="seg" id="resSeg" style="width:200px">
+        <button data-v="480p" class="on">480p</button>
+        <button data-v="580p">580p</button>
+        <button data-v="720p">720p</button>
+      </div>
+    </div>
+    <div class="row"><span>Rough cost</span><span id="cost">–</span></div>
+  </section>
+
+  <button class="go" id="go" disabled>Swap it</button>
+  <div class="bar" id="bar"><i></i></div>
+  <div class="status" id="status"></div>
+
+  <section class="card result hidden" id="result">
+    <h2>Result</h2>
+    <video id="out" controls playsinline loop></video>
+    <div class="actions">
+      <button class="btn" id="shareBtn">Share / save</button>
+      <a class="btn" id="openLink" href="#" target="_blank" rel="noopener">Open video</a>
+    </div>
+    <p class="hint">Results are hosted by fal.ai for a limited time. Save the ones you want to keep.</p>
+  </section>
+
+  <p class="foot">Runs on Wan 2.2 Animate via fal.ai, billed to your fal account.<br>Use footage and faces you have the right to use.</p>
+</main>
+
+<dialog id="keyDlg">
+  <form method="dialog" id="keyForm">
+    <h2 style="margin:0 0 6px;font-size:18px">fal.ai API key</h2>
+    <p class="hint" style="margin-top:0">Get one at <a href="https://fal.ai/dashboard/keys" target="_blank" rel="noopener">fal.ai/dashboard/keys</a> and add some credit. It's kept on this device only.</p>
+    <input type="password" id="keyInput" placeholder="xxxxxxxx-xxxx-…:xxxxxxxx" autocomplete="off" spellcheck="false">
+    <div class="actions" style="margin-top:12px">
+      <button class="btn" value="cancel" type="button" id="keyCancel">Cancel</button>
+      <button class="btn" value="save" id="keySave" style="background:var(--pink);border-color:var(--pink)">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script type="module">
+import { fal } from "https://cdn.jsdelivr.net/npm/@fal-ai/client@1/+esm";
+
+const $ = id => document.getElementById(id);
+const ENDPOINTS = { replace: "fal-ai/wan/v2.2-14b/animate/replace", move: "fal-ai/wan/v2.2-14b/animate/move" };
+const PRICE = { "480p": 0.04, "580p": 0.06, "720p": 0.08 }; // USD per billed second (16 frames)
+const store = {
+  get(k){ try { return localStorage.getItem(k); } catch { return null; } },
+  set(k,v){ try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k,v); } catch {} }
+};
+
+let videoFile = null, photoFile = null, duration = 0;
+let mode = "replace", res = "480p", busy = false, resultUrl = null;
+
+// ---------- API key ----------
+const getKey = () => store.get("falKey") || "";
+function openKey(){ $("keyInput").value = getKey(); $("keyDlg").showModal(); }
+$("keyBtn").onclick = openKey;
+$("keyCancel").onclick = () => $("keyDlg").close();
+$("keyForm").onsubmit = e => {
+  e.preventDefault();
+  store.set("falKey", $("keyInput").value.trim() || null);
+  $("keyDlg").close(); refreshKeyBtn(); refresh();
+};
+function refreshKeyBtn(){ $("keyBtn").textContent = getKey() ? "API key ✓" : "Add API key"; }
+
+// ---------- pickers ----------
+$("vFile").onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  videoFile = f; duration = 0;
+  const url = URL.createObjectURL(f);
+  const v = document.createElement("video");
+  v.src = url; v.muted = true; v.playsInline = true; v.loop = true; v.autoplay = true;
+  v.onloadedmetadata = () => { duration = v.duration || 0; $("vSub").textContent = `${duration.toFixed(1)} s · ${(f.size/1e6).toFixed(1)} MB`; refresh(); };
+  $("vThumb").replaceChildren(v);
+  $("vName").textContent = f.name || "Video";
+  refresh();
+};
+$("pFile").onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  photoFile = f;
+  const img = new Image(); img.src = URL.createObjectURL(f);
+  $("pThumb").replaceChildren(img);
+  $("pName").textContent = f.name || "Photo";
+  refresh();
+};
+
+// ---------- settings ----------
+function seg(id, cb){
+  $(id).querySelectorAll("button").forEach(b => b.onclick = () => {
+    $(id).querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+    cb(b.dataset.v); refresh();
+  });
+}
+seg("modeSeg", v => {
+  mode = v;
+  $("modeHint").textContent = v === "replace"
+    ? "Keeps the video's background, lighting and camera. Your character takes the person's place."
+    : "Keeps your photo's background and makes your character copy the moves and expressions from the video.";
+});
+seg("resSeg", v => res = v);
+
+function refresh(){
+  // Billing is per output frame at 16 frames per billed second; assumes a 30 fps clip.
+  $("cost").textContent = duration ? `≈ US$${(duration*30/16*PRICE[res]).toFixed(2)}` : "–";
+  $("go").disabled = busy || !videoFile || !photoFile;
+}
+
+// ---------- status ----------
+function status(msg, err=false, spinning=false){
+  $("status").textContent = msg; $("status").classList.toggle("err", err);
+  $("bar").style.display = spinning ? "block" : "none";
+}
+function errText(e){
+  const d = e?.body?.detail;
+  if (Array.isArray(d)) return d.map(x => x.msg || JSON.stringify(x)).join("; ");
+  if (d) return typeof d === "string" ? d : JSON.stringify(d);
+  if (e?.status === 401 || e?.status === 403) return "fal.ai rejected the API key. Check it under API key.";
+  return e?.message || String(e);
+}
+
+// ---------- run ----------
+$("go").onclick = async () => {
+  if (!getKey()) { openKey(); return; }
+  fal.config({ credentials: getKey() });
+  busy = true; refresh(); $("result").classList.add("hidden");
+  try {
+    status("Uploading video…", false, true);
+    const video_url = await fal.storage.upload(videoFile);
+    status("Uploading photo…", false, true);
+    const image_url = await fal.storage.upload(photoFile);
+    status("Sending to the model…", false, true);
+    const endpoint = ENDPOINTS[mode];
+    const { request_id } = await fal.queue.submit(endpoint, { input: { video_url, image_url, resolution: res } });
+    store.set("pendingJob", JSON.stringify({ endpoint, request_id, t: Date.now() }));
+    await poll(endpoint, request_id);
+  } catch (e) {
+    status("Couldn't finish: " + errText(e), true);
+  } finally { busy = false; refresh(); }
+};
+
+async function poll(endpoint, requestId){
+  const t0 = Date.now();
+  let fails = 0;
+  while (true) {
+    let s;
+    try { s = await fal.queue.status(endpoint, { requestId, logs: false }); fails = 0; }
+    catch (e) {
+      // Phone dropped signal or the app was in the background: keep trying for a bit.
+      if (++fails > 8 || e?.status === 401 || e?.status === 403 || e?.status === 404) throw e;
+      status("Connection hiccup, retrying…", false, true);
+      await new Promise(r => setTimeout(r, 5000)); continue;
+    }
+    const secs = Math.round((Date.now() - t0) / 1000);
+    if (s.status === "IN_QUEUE") status(`In the queue${s.queue_position != null ? ` (position ${s.queue_position + 1})` : ""}… ${secs}s`, false, true);
+    else if (s.status === "IN_PROGRESS") status(`Generating… ${secs}s (usually a few minutes; you can leave the app and come back)`, false, true);
+    else if (s.status === "COMPLETED") break;
+    await new Promise(r => setTimeout(r, 4000));
+  }
+  const r = await fal.queue.result(endpoint, { requestId });
+  store.set("pendingJob", null);
+  const url = r?.data?.video?.url;
+  if (!url) throw new Error("The model finished but returned no video.");
+  showResult(url);
+}
+
+function showResult(url){
+  resultUrl = url;
+  store.set("lastResult", url);
+  $("out").src = url; $("openLink").href = url;
+  $("result").classList.remove("hidden");
+  status("Done ✓");
+  $("result").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+$("shareBtn").onclick = async () => {
+  if (!resultUrl) return;
+  try {
+    status("Preparing video…", false, true);
+    const blob = await (await fetch(resultUrl)).blob();
+    const file = new File([blob], `clip-swap-${Date.now()}.mp4`, { type: "video/mp4" });
+    status("");
+    if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file] }); return; }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(file); a.download = file.name; a.click();
+  } catch (e) {
+    if (e?.name === "AbortError") { status(""); return; }
+    status("Couldn't share directly. Use Open video and save it from there.", true);
+  }
+};
+
+// ---------- resume a job that was running when the app closed ----------
+async function resume(){
+  const raw = store.get("pendingJob"); if (!raw || !getKey()) return;
+  let job; try { job = JSON.parse(raw); } catch { store.set("pendingJob", null); return; }
+  if (Date.now() - job.t > 6 * 3600e3) { store.set("pendingJob", null); return; }
+  fal.config({ credentials: getKey() });
+  busy = true; refresh();
+  try { status("Picking up your last swap…", false, true); await poll(job.endpoint, job.request_id); }
+  catch (e) { store.set("pendingJob", null); status("Last swap didn't finish: " + errText(e), true); }
+  finally { busy = false; refresh(); }
+}
+
+refreshKeyBtn(); refresh();
+if (!getKey()) status("Add your fal.ai API key to start (top right).");
+resume();
+
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost"))
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+</script>
+</body>
+</html>
